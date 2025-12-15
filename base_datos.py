@@ -1,6 +1,8 @@
 import sys, os
 import sqlite3
 from datetime import datetime
+import sqlite3
+from datetime import datetime
 
 # Detecta la carpeta base correctamente incluso dentro del exe
 if getattr(sys, 'frozen', False):
@@ -35,7 +37,6 @@ def conectar():
     return conn
 
 
-
 def guardar_materia_prima(nombre, categoria, precio, proveedor):
     conn = conectar()
     cursor = conn.cursor()
@@ -48,7 +49,6 @@ def guardar_materia_prima(nombre, categoria, precio, proveedor):
 
     conn.commit()
     conn.close()
-
 
 def guardar_materia_prima_debug(nombre, categoria, precio, proveedor=""):
     print("➡️ Llamado a guardar_materia_prima con:", nombre, categoria, precio, proveedor)
@@ -83,56 +83,55 @@ def guardar_materia_prima_debug(nombre, categoria, precio, proveedor=""):
         conn.close()
 
 
-def modificar_materia(nombre, nueva_categoria, nuevo_precio, proveedor):
+def modificar_materia(nombre, nueva_categoria, nuevo_precio):
     conn = sqlite3.connect(RUTA_DB)
     cursor = conn.cursor()
 
-    # Actualizar precio, categoría y proveedor
     cursor.execute("""
         UPDATE materias_primas
-        SET categoria = ?, precio = ?, proveedor = ?
+        SET categoria = ?, precio = ?, fecha_actualizacion = CURRENT_TIMESTAMP
         WHERE nombre = ?
-    """, (nueva_categoria, float(nuevo_precio), proveedor, nombre))
-
-    # Buscar recetas que usan esta materia prima
-    cursor.execute("SELECT id_receta FROM ingredientes WHERE nombre_materia=?", (nombre,))
-    recetas_afectadas = cursor.fetchall()
-
-    # Recalcular cada receta
-    for (id_receta,) in recetas_afectadas:
-        cursor.execute("SELECT nombre_materia, cantidad FROM ingredientes WHERE id_receta=?", (id_receta,))
-        ingredientes = cursor.fetchall()
-
-        costo_total = 0
-        for nombre_mp, cantidad in ingredientes:
-            cursor.execute("SELECT precio FROM materias_primas WHERE nombre=?", (nombre_mp,))
-            resultado = cursor.fetchone()
-            if resultado:
-                precio = resultado[0]
-                costo_total += precio * cantidad / 1000  # suponiendo que cantidad está en gramos
-
-        cursor.execute("UPDATE recetas SET costo_total=? WHERE id=?", (costo_total, id_receta))
+    """, (nueva_categoria, nuevo_precio, nombre))
 
     conn.commit()
     conn.close()
 
 
-def recalcular_costos_receta(cursor, id_receta):
-    # Obtener todos los ingredientes de la receta
-    cursor.execute("SELECT nombre_materia, cantidad FROM ingredientes WHERE id_receta=?", (id_receta,))
-    ingredientes = cursor.fetchall()
+def actualizar_costos_por_materia(nombre_materia):
+    conn = sqlite3.connect(RUTA_DB)
+    cursor = conn.cursor()
 
-    costo_total = 0
-    for nombre_mp, cantidad in ingredientes:
-        cursor.execute("SELECT precio FROM materias_primas WHERE nombre=?", (nombre_mp,))
-        resultado = cursor.fetchone()
-        if resultado:
-            precio = resultado[0]
-            costo_total += precio * cantidad / 1000  # suponiendo que cantidad está en gramos
+    cursor.execute("""
+        SELECT DISTINCT id_receta
+        FROM ingredientes
+        WHERE nombre_materia = ?
+    """, (nombre_materia,))
 
-    # Actualizar el costo total de la receta
-    cursor.execute("UPDATE recetas SET costo_total=? WHERE id=?", (costo_total, id_receta))
+    recetas = cursor.fetchall()
 
+    for (id_receta,) in recetas:
+        cursor.execute("""
+            SELECT nombre_materia, cantidad
+            FROM ingredientes
+            WHERE id_receta = ?
+        """, (id_receta,))
+
+        ingredientes = cursor.fetchall()
+        costo_total = 0
+
+        for nombre, cantidad in ingredientes:
+            cursor.execute("SELECT precio FROM materias_primas WHERE nombre=?", (nombre,))
+            precio = cursor.fetchone()[0]
+            costo_total += (precio * cantidad) / 1000
+
+        cursor.execute("""
+            UPDATE recetas
+            SET costo_total = ?
+            WHERE id = ?
+        """, (costo_total, id_receta))
+
+    conn.commit()
+    conn.close()
 
 def obtener_materias_primas():
     conn = conectar()
@@ -153,8 +152,19 @@ def obtener_precio_actual(nombre):
             return mp[2]
     return 0.0
 
-import sqlite3
-from datetime import datetime
+def registrar_modificacion(nombre, precio_anterior, precio_nuevo):
+    conn = sqlite3.connect(RUTA_DB)
+    cursor = conn.cursor()
+
+    cursor.execute("""
+        INSERT INTO historial_modificaciones
+        (materia, precio_anterior, precio_nuevo, fecha)
+        VALUES (?, ?, ?, datetime('now'))
+    """, (nombre, precio_anterior, precio_nuevo))
+
+    conn.commit()
+    conn.close()
+
 
 def agregar_receta(nombre, ingredientes, peso_total, merma, peso_final, costo_total,
                    peso_unidad, rinde, envase, costo_unidad):

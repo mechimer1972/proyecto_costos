@@ -172,74 +172,45 @@ def abrir_materias_primas():
             actualizar_lista()
 
     def modificar():
-        # Nombre original cargado al presionar "Cargar para modificar"
-        nombre_original = original_nombre[0] if original_nombre[0] else entrada_nombre.get().strip()
-        nombre_nuevo = entrada_nombre.get().strip()
+        seleccion = tree.selection()
+        if not seleccion:
+            messagebox.showerror("Error", "Seleccioná una materia prima")
+            return
+
+        valores = tree.item(seleccion[0])["values"]
+        nombre = valores[0]
+
         nueva_categoria = combo_categoria.get().strip()
-        proveedor_texto = entrada_proveedor.get().strip()
         precio_texto = entrada_precio.get().strip().replace(",", ".").replace("$", "")
 
-        if not nombre_nuevo or not nueva_categoria or not precio_texto:
-            messagebox.showerror("Error", "Todos los campos son obligatorios", parent=ventana)
+        if not nueva_categoria or not precio_texto:
+            messagebox.showerror("Error", "Categoría y precio son obligatorios")
             return
 
         try:
             nuevo_precio = float(precio_texto)
         except ValueError:
-            messagebox.showerror("Error", "Precio inválido. Usá solo números, con punto decimal si es necesario.")
+            messagebox.showerror("Error", "Precio inválido")
             return
 
-        # Obtener el precio actual antes de modificar (usamos nombre_original)
-        precio_anterior = obtener_precio_actual(nombre_original)
+        # 🔹 precio anterior
+        precio_anterior = obtener_precio_actual(nombre)
 
-        # Registrar la modificación en el historial SOLO si cambió el precio
+        # 🔹 actualizar materia prima
+        modificar_materia(nombre, nueva_categoria, nuevo_precio)
+
+        # 🔹 si cambió el precio → historial + recetas
         if precio_anterior != nuevo_precio:
-            registrar_modificacion(nombre_original, precio_anterior, nuevo_precio)
+            registrar_modificacion(nombre, precio_anterior, nuevo_precio)
+            actualizar_costos_por_materia(nombre)
 
-        # Aplicar la modificación principal (no rompe la lógica de recalculo de recetas)
-        try:
-            # modificar_materia debe actualizar precio, categoria y proveedor para el registro identificado por nombre_original
-            modificar_materia(nombre_original, nueva_categoria, nuevo_precio, proveedor_texto)
-        except Exception as e:
-            messagebox.showerror("Error", f"No se pudo modificar:\n{e}", parent=ventana)
-            return
-
-        # Si el nombre cambió, actualizamos el nombre en la tabla materias_primas Y en ingredientes_receta
-        if nombre_nuevo and nombre_nuevo != nombre_original:
-            try:
-                conn = sqlite3.connect(RUTA_DB)
-                cursor = conn.cursor()
-
-                # Actualizar nombre en materias_primas
-                cursor.execute("UPDATE materias_primas SET nombre = ? WHERE nombre = ?", (nombre_nuevo, nombre_original))
-
-                # Actualizar referencia en ingredientes_receta (o la tabla que uses para ingredientes)
-                cursor.execute("UPDATE ingredientes_receta SET materia = ? WHERE materia = ?", (nombre_nuevo, nombre_original))
-
-                conn.commit()
-                conn.close()
-
-            except Exception as e:
-                messagebox.showwarning("Advertencia", f"No se pudo renombrar totalmente la materia en todas las tablas:\n{e}", parent=ventana)
-
-        # 🔄 Actualizar costos de recetas relacionadas (usar el nombre final)
-        nombre_para_actualizar = nombre_nuevo if nombre_nuevo else nombre_original
-        try:
-            actualizar_costos_por_materia(nombre_para_actualizar)
-        except Exception as e:
-            # Si falla la actualización automática, avisar pero no interrumpir
-            messagebox.showwarning("Advertencia", f"No se pudo actualizar costos de recetas automáticamente:\n{e}", parent=ventana)
-
-        # (opcional) mostrar mensaje de confirmación
-        messagebox.showinfo("Actualización", f"'{nombre_para_actualizar}' se actualizó correctamente y las recetas vinculadas se recalcularon (si fue posible).")
-
-        # Reiniciar original_nombre y limpiar campos
-        original_nombre[0] = None
-        entrada_nombre.delete(0, tk.END)
-        entrada_precio.delete(0, tk.END)
-        combo_categoria.set("")
-        entrada_proveedor.delete(0, tk.END)
         actualizar_lista()
+
+        messagebox.showinfo(
+            "Éxito",
+            f"'{nombre}' se actualizó correctamente.",
+            parent=ventana
+        )
 
     def imprimir():
         ventana_cat = tk.Toplevel(ventana)
@@ -300,20 +271,25 @@ def abrir_materias_primas():
             tk.Checkbutton(ventana_cat, text=cat, variable=var).pack(anchor="w", padx=10)
 
         tk.Button(ventana_cat, text="Confirmar selección", command=confirmar_seleccion).pack(pady=15)
+    
     def cargar_para_modificar():
         seleccion = tree.selection()
         if not seleccion:
+            messagebox.showerror("Error", "Seleccioná un producto")
             return
 
         valores = tree.item(seleccion[0])["values"]
-        entrada_nombre.delete(0, tk.END)
+
+        entrada_nombre.delete(0, "end")
         entrada_nombre.insert(0, valores[0])
+
         combo_categoria.set(valores[1])
-        # precio viene con $ en la lista
-        entrada_precio.delete(0, tk.END)
+        entrada_precio.delete(0, "end")
         entrada_precio.insert(0, valores[2].replace("$", ""))
-        entrada_proveedor.delete(0, tk.END)
-        entrada_proveedor.insert(0, valores[3])
+
+        entrada_proveedor.delete(0, "end")
+        entrada_proveedor.insert(0, valores[3] or "")
+
 
         # Guardar el nombre original para usar en la modificación
         original_nombre[0] = valores[0]

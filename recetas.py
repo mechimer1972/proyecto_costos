@@ -172,7 +172,6 @@ def abrir_recetas():
 
         actualizar_totales()
 
-
         # Resetear campos
         combo_mp.set("")
         entrada_cantidad.delete(0, tk.END)
