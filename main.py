@@ -11,6 +11,8 @@ import sqlite3
 from PIL import Image, ImageTk
 import os, sys
 
+from openpyxl import Workbook
+from openpyxl.styles import Font, Alignment
 
 # =============================
 # FUNCIONES DE RECURSOS
@@ -52,26 +54,46 @@ def crear_tabla_recetas():
 crear_tablas_recetas()
 crear_tabla_recetas()
 
-import csv
+from openpyxl import Workbook
+from openpyxl.styles import Font, Alignment
 
-def exportar_historial():
-    try:
-        conn = sqlite3.connect(RUTA_DB)
-        cur = conn.cursor()
-        cur.execute("SELECT materia, precio_anterior, precio_nuevo, fecha FROM historial_modificaciones")
-        filas = cur.fetchall()
-        conn.close()
+def exportar_historial_openpyxl():
+    conn = sqlite3.connect(RUTA_DB)
+    cursor = conn.cursor()
+    cursor.execute("SELECT materia, precio_anterior, precio_nuevo, fecha FROM historial_modificaciones")
+    filas = cursor.fetchall()
+    conn.close()
 
-        # Exportar a CSV
-        ruta_csv = "historial_modificaciones.csv"
-        with open(ruta_csv, "w", newline="", encoding="utf-8") as f:
-            writer = csv.writer(f)
-            writer.writerow(["Materia", "Precio Anterior", "Precio Nuevo", "Fecha"])
-            writer.writerows(filas)
+    wb = Workbook()
+    ws = wb.active
+    ws.title = "Historial"
 
-        messagebox.showinfo("Exportación exitosa", f"Historial exportado a:\n{ruta_csv}")
-    except Exception as e:
-        messagebox.showerror("Error", f"No se pudo exportar el historial:\n{e}")
+    # Encabezados con estilo
+    headers = ["Materia", "Precio Anterior", "Precio Nuevo", "Fecha"]
+    for col, header in enumerate(headers, start=1):
+        cell = ws.cell(row=1, column=col, value=header)
+        cell.font = Font(bold=True)
+        cell.alignment = Alignment(horizontal="center")
+
+    # Datos
+    for row, fila in enumerate(filas, start=2):
+        for col, valor in enumerate(fila, start=1):
+            ws.cell(row=row, column=col, value=valor)
+
+    # Ajustar ancho de columnas automáticamente
+    for col in ws.columns:
+        max_length = 0
+        col_letter = col[0].column_letter
+        for cell in col:
+            try:
+                if cell.value:
+                    max_length = max(max_length, len(str(cell.value)))
+            except:
+                pass
+        ws.column_dimensions[col_letter].width = max_length + 2
+
+    wb.save("historial_modificaciones.xlsx")
+    messagebox.showinfo("Exportación exitosa", "Historial exportado a historial_modificaciones.xlsx")
 
 
 # =============================
@@ -134,7 +156,7 @@ def iniciar_sistema(usuario):
     btn_visualizar.grid(row=2, column=0, padx=10, pady=10)
 
     btn_exportar = tk.Button(marco_botones, text="Exportar historial", width=25, height=2,
-                         font=("Arial", 12), command=exportar_historial)
+                         font=("Arial", 12), command=exportar_historial_openpyxl)
     btn_exportar.grid(row=5, column=0, padx=10, pady=10)
 
 
