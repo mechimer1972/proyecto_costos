@@ -52,6 +52,27 @@ def crear_tabla_recetas():
 crear_tablas_recetas()
 crear_tabla_recetas()
 
+import csv
+
+def exportar_historial():
+    try:
+        conn = sqlite3.connect(RUTA_DB)
+        cur = conn.cursor()
+        cur.execute("SELECT materia, precio_anterior, precio_nuevo, fecha FROM historial_modificaciones")
+        filas = cur.fetchall()
+        conn.close()
+
+        # Exportar a CSV
+        ruta_csv = "historial_modificaciones.csv"
+        with open(ruta_csv, "w", newline="", encoding="utf-8") as f:
+            writer = csv.writer(f)
+            writer.writerow(["Materia", "Precio Anterior", "Precio Nuevo", "Fecha"])
+            writer.writerows(filas)
+
+        messagebox.showinfo("Exportación exitosa", f"Historial exportado a:\n{ruta_csv}")
+    except Exception as e:
+        messagebox.showerror("Error", f"No se pudo exportar el historial:\n{e}")
+
 
 # =============================
 # SISTEMA PRINCIPAL
@@ -111,6 +132,11 @@ def iniciar_sistema(usuario):
     btn_visualizar = tk.Button(marco_botones, text="Visualizar Costos", width=25, height=2,
                                font=("Arial", 12), command=visualizar_costos)
     btn_visualizar.grid(row=2, column=0, padx=10, pady=10)
+
+    btn_exportar = tk.Button(marco_botones, text="Exportar historial", width=25, height=2,
+                         font=("Arial", 12), command=exportar_historial)
+    btn_exportar.grid(row=5, column=0, padx=10, pady=10)
+
 
     # --------------------
     # BOTÓN DE BACKUP
